@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Messages List</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <h1>Messages</h1>
+        <button id="back-btn">Back</button>
+    </header>
+    <main>
+        <div id="messages-list-container"></div>
+    </main>
+    <script type="module">
+        import { auth, db } from "./app.js";
+        import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { getDocs, collection, query, orderBy, limit, where, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        document.getElementById('back-btn').addEventListener('click', () => {
+            window.location.href = 'main.html';
+        });
+
+        onAuthStateChanged(auth, user => {
+            if (user) {
+                loadMessagesList(user.uid);
+            } else {
+                window.location.href = 'login.html';
+            }
+        });
+
+        async function loadMessagesList(currentUserUid) {
+            const messagesListContainer = document.getElementById('messages-list-container');
+            messagesListContainer.innerHTML = 'Loading...';
+
+            const q = query(collection(db, "chats"), where("users", "array-contains", currentUserUid));
+            const querySnapshot = await getDocs(q);
+            messagesListContainer.innerHTML = '';
+
+            querySnapshot.forEach(async (doc) => {
+                const chatId = doc.id;
+                const lastMessageQuery = query(collection(db, `chats/${chatId}/messages`), orderBy('timestamp', 'desc'), limit(1));
+                const lastMessageSnapshot = await getDocs(lastMessageQuery);
+                const lastMessage = lastMessageSnapshot.docs[0].data();
+                const chatPartnerUid = doc.data().users.find(uid => uid !== currentUserUid);
+                const chatPartnerDoc = await getDoc(doc(db, "users", chatPartnerUid));
+                const chatPartnerData = chatPartnerDoc.data();
+
+                const messageElement = document.createElement('div');
+                messageElement.className = 'message-item';
+                messageElement.innerHTML = `
+                    <h3><a href="messages.html?uid=${chatPartnerUid}" class="user-link">${chatPartnerData.username}</a></h3>
+                    <p>${lastMessage.text}</p>
+                `;
+                messagesListContainer.appendChild(messageElement);
+            });
+        }
+    </script>
+</body>
+</html>

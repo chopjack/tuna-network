@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>All Users</title>
+    <link rel="stylesheet" href="./scearch.css">
+</head>
+<body>
+    <header>
+        <h1>Tuna</h1>
+        <button id="back-btn">Back</button>
+    </header>
+    <main>
+        <h1>Search</h1>
+        <input type="text" id="search-input" placeholder="Search users by username...">
+        <div id="users-container"></div>
+    </main>
+    <script type="module">
+        import { db } from "./app.js";
+        import { getDocs, collection, query, where } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        document.getElementById('back-btn').addEventListener('click', () => {
+            window.location.href = 'main.html';
+        });
+
+        async function loadAllUsers() {
+            const usersContainer = document.getElementById('users-container');
+            usersContainer.innerHTML = 'Loading...';
+            const querySnapshot = await getDocs(collection(db, "users"));
+            usersContainer.innerHTML = '';
+            querySnapshot.forEach((doc) => {
+                const user = doc.data();
+                const userElement = document.createElement('div');
+                userElement.className = 'user';
+                userElement.innerHTML = `
+                    <h3><a href="user-profile.html?uid=${doc.id}" class="user-link">${user.username}</a></h3>
+                    <p>${user.bio || ''}</p>
+                    <p>${user.gender || ''}</p>
+                    <p>${user.job || ''}</p>
+                `;
+                usersContainer.appendChild(userElement);
+            });
+
+            document.querySelectorAll('.user-link').forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const uid = e.target.getAttribute('data-uid');
+                    window.location.href = `user-profile.html?uid=${uid}`;
+                });
+            });
+        }
+
+        async function searchUsers(queryString) {
+            const usersContainer = document.getElementById('users-container');
+            usersContainer.innerHTML = 'Searching...';
+            const q = query(collection(db, "users"), where("username", ">=", queryString), where("username", "<=", queryString + '\uf8ff'));
+            const querySnapshot = await getDocs(q);
+            usersContainer.innerHTML = '';
+            querySnapshot.forEach((doc) => {
+                const user = doc.data();
+                const userElement = document.createElement('div');
+                userElement.className = 'user';
+                userElement.innerHTML = `
+                    <h3><a href="user-profile.html?uid=${doc.id}" class="user-link">${user.username}</a></h3>
+                    <p>${user.bio || ''}</p>
+                    <p>${user.gender || ''}</p>
+                    <p>${user.job || ''}</p>
+                `;
+                usersContainer.appendChild(userElement);
+            });
+
+            document.querySelectorAll('.user-link').forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const uid = e.target.getAttribute('data-uid');
+                    window.location.href = `user-profile.html?uid=${uid}`;
+                });
+            });
+        }
+
+        document.getElementById('search-input').addEventListener('input', (e) => {
+            const queryString = e.target.value.trim();
+            if (queryString) {
+                searchUsers(queryString);
+            } else {
+                loadAllUsers();
+            }
+        });
+
+        loadAllUsers();
+    </script>
+</body>
+</html>

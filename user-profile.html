@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Profile</title>
+    <link rel="stylesheet" href="./u-profile.css">
+</head>
+<body>
+    <header>
+        <h1>User Profile</h1>
+        <button id="back-btn">Back</button>
+    </header>
+    <main>
+        <div id="profile-info">
+            <h2 id="profile-username">Username</h2>
+            <p id="profile-email">Email</p>
+            <p id="profile-bio">Bio</p>
+            <p id="profile-gender">Gender</p>
+            <p id="profile-job">Job</p>
+            <p id="profile-followers">Followers: <span id="followers-count">0</span></p>
+            <button id="show-followers-btn">Show Followers</button>
+            <button id="follow-btn">Follow</button>
+            <button id="message-btn">Message</button>
+        </div>
+    </main>
+    <div id="followers-popup" class="popup">
+        <div class="popup-content">
+            <span class="close-btn">&times;</span>
+            <h3>Followers</h3>
+            <ul id="followers-list-container"></ul>
+        </div>
+    </div>
+    <script type="module">
+        import { auth, db } from "./app.js";
+        import { getDoc, doc, updateDoc, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+        document.getElementById('back-btn').addEventListener('click', () => {
+            window.history.back();
+        });
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const uid = urlParams.get('uid');
+        let currentUid;
+
+        onAuthStateChanged(auth, user => {
+            if (user) {
+                currentUid = user.uid;
+                loadUserProfile(uid, currentUid);
+            } else {
+                window.location.href = 'login.html';
+            }
+        });
+
+        async function loadUserProfile(uid, currentUid) {
+            const userDoc = await getDoc(doc(db, "users", uid));
+            if (userDoc.exists()) {
+                const userData = userDoc.data();
+                document.getElementById('profile-username').textContent = userData.username;
+                document.getElementById('profile-email').textContent = `Email: ${userData.email || ''}`;
+                document.getElementById('profile-bio').textContent = userData.bio || '';
+                document.getElementById('profile-gender').textContent = `Gender: ${userData.gender || ''}`;
+                document.getElementById('profile-job').textContent = `Job: ${userData.job || ''}`;
+                document.getElementById('followers-count').textContent = userData.followers ? userData.followers.length : 0;
+
+                const followBtn = document.getElementById('follow-btn');
+                followBtn.textContent = userData.followers && userData.followers.includes(currentUid) ? 'Unfollow' : 'Follow';
+
+                followBtn.addEventListener('click', async () => {
+                    if (followBtn.textContent === 'Follow') {
+                        await followUser(currentUid, uid);
+                        followBtn.textContent = 'Unfollow';
+                    } else {
+                        await unfollowUser(currentUid, uid);
+                        followBtn.textContent = 'Follow';
+                    }
+                });
+
+                document.getElementById('show-followers-btn').addEventListener('click', () => {
+                    loadFollowers(uid);
+                    document.getElementById('followers-popup').style.display = 'block';
+                });
+
+                document.getElementById('message-btn').addEventListener('click', () => {
+                    window.location.href = `messages.html?uid=${uid}`;
+                });
+
+            } else {
+                document.getElementById('profile-info').innerHTML = '<p>User not found.</p>';
+            }
+        }
+
+        async function followUser(currentUid, uid) {
+            const currentUserRef = doc(db, "users", currentUid);
+            const targetUserRef = doc(db, "users", uid);
+
+            await updateDoc(currentUserRef, {
+                following: arrayUnion(uid)
+            });
+
+            await updateDoc(targetUserRef, {
+                followers: arrayUnion(currentUid)
+            });
+
+            document.getElementById('followers-count').textContent++;
+        }
+
+        async function unfollowUser(currentUid, uid) {
+            const currentUserRef = doc(db, "users", currentUid);
+            const targetUserRef = doc(db, "users", uid);
+
+            await updateDoc(currentUserRef, {
+                following: arrayRemove(uid)
+            });
+
+            await updateDoc(targetUserRef, {
+                followers: arrayRemove(currentUid)
+            });
+
+            document.getElementById('followers-count').textContent--;
+        }
+
+        async function loadFollowers(uid) {
+            const followersListContainer = document.getElementById('followers-list-container');
+            followersListContainer.innerHTML = '';
+            const userDoc = await getDoc(doc(db, "users", uid));
+            if (userDoc.exists()) {
+                const followers = userDoc.data().followers || [];
+                for (const followerId of followers) {
+                    const followerDoc = await getDoc(doc(db, "users", followerId));
+                    if (followerDoc.exists()) {
+                        const followerData = followerDoc.data();
+                        const followerElement = document.createElement('li');
+                        followerElement.textContent = followerData.username;
+                        followersListContainer.appendChild(followerElement);
+                    }
+                }
+            }
+        }
+
+        document.querySelector('.close-btn').addEventListener('click', () => {
+            document.getElementById('followers-popup').style.display = 'none';
+        });
+    </script>
+</body>
+</html>

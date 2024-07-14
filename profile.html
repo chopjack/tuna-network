@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile</title>
+    <link rel="stylesheet" href="./profile.css">
+</head>
+<body>
+    <header>
+        <h1>Tuna</h1>
+        <button class="button" id="back-btn">Back</button>
+    </header>
+    <main>
+        
+        <form id="profile-form">
+            <h1>My Profile</h1>
+            <label for="username">Username:</label>
+            <input type="text" id="username" placeholder="Enter new username">
+            
+            <label for="password">Password:</label>
+            <input type="password" id="password" placeholder="Enter new password">
+            
+            <label for="bio">Bio:</label>
+            <textarea id="bio" placeholder="Enter your bio"></textarea>
+            
+            <label for="gender">Gender:</label>
+            <input type="text" id="gender" placeholder="Enter your gender">
+
+            <label for="job">Job:</label>
+            <input type="text" id="job" placeholder="Enter your job">
+            
+            <button type="submit">Update Profile</button>
+        </form>
+    </main>
+    <script type="module">
+        import { auth, db } from "./app.js";
+        import { onAuthStateChanged, updatePassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { doc, updateDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        document.getElementById('back-btn').addEventListener('click', () => {
+            window.location.href = 'main.html';
+        });
+
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                const userDoc = await getDoc(doc(db, "users", user.uid));
+                if (userDoc.exists()) {
+                    document.getElementById('username').value = userDoc.data().username || '';
+                    document.getElementById('bio').value = userDoc.data().bio || '';
+                    document.getElementById('gender').value = userDoc.data().gender || '';
+                    document.getElementById('job').value = userDoc.data().job || '';
+                }
+            } else {
+                window.location.href = 'login.html';
+            }
+        });
+
+        document.getElementById('profile-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const user = auth.currentUser;
+            const userDocRef = doc(db, "users", user.uid);
+
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const bio = document.getElementById('bio').value;
+            const gender = document.getElementById('gender').value;
+            const job = document.getElementById('job').value;
+
+            const updates = {};
+            if (username) updates.username = username;
+            if (bio) updates.bio = bio;
+            if (gender) updates.gender = gender;
+            if (job) updates.job = job;
+
+            try {
+                if (password) {
+                    await updatePassword(user, password);
+                }
+
+                if (Object.keys(updates).length > 0) {
+                    await updateDoc(userDocRef, updates);
+                }
+
+                alert('Profile updated successfully');
+            } catch (error) {
+                console.error('Error updating profile: ', error);
+                alert('Error updating profile: ' + error.message);
+            }
+        });
+    </script>
+</body>
+</html>

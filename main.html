@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Main Page</title>
+    <link rel="stylesheet" href="./main.css">
+</head>
+<body>
+    <header>
+        <h1>Tuna</h1>
+        <div id="profile-container">
+            <span id="profile-name">Username</span>
+            <button id="logout-btn">Logout</button>
+        </div>
+    </header>
+    <button id="menu-btn" class="menu-btn">☰</button>
+    <div class="container">
+        <nav id="sidebar" class="sidebar">
+            <button class="tab-button" id="home-btn">Home</button>
+            <button class="tab-button" id="profile-btn">Profile</button>
+            <button class="tab-button">Settings</button>
+            <button class="tab-button" id="search-btn">Search</button>
+            <button class="tab-button">Messages</button>
+        </nav>
+        <main id="content">
+            <form id="post-form" class="fixed-form">
+                <textarea id="post-text" placeholder="Write something..." required></textarea>
+                <button type="submit">Post</button>
+            </form>
+            <div id="posts-container"></div>
+        </main>
+        <aside id="followers-sidebar" class="sidebar right-sidebar">
+            <h2>Followers</h2>
+            <div id="followers-container"></div>
+        </aside>
+    </div>
+    <script type="module">
+        import { auth, db } from "./app.js";
+        import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { collection, addDoc, serverTimestamp, deleteDoc, doc, query, orderBy, onSnapshot, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        document.getElementById('logout-btn').addEventListener('click', () => {
+            signOut(auth).then(() => {
+                window.location.href = 'login.html';
+            }).catch((error) => {
+                console.error('Error logging out: ', error);
+            });
+        });
+
+        document.getElementById('menu-btn').addEventListener('click', () => {
+            document.getElementById('sidebar').classList.toggle('active');
+        });
+
+        document.getElementById('profile-btn').addEventListener('click', () => {
+            window.location.href = 'profile.html';
+        });
+
+        document.getElementById('search-btn').addEventListener('click', () => {
+            window.location.href = 'all-users.html';
+        });
+
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                const userDoc = await getDoc(doc(db, "users", user.uid));
+                if (userDoc.exists()) {
+                    document.getElementById('profile-name').textContent = userDoc.data().username;
+                    loadFollowers(user.uid);
+                }
+                subscribeToPosts();
+            } else {
+                window.location.href = 'login.html';
+            }
+        });
+
+        function subscribeToPosts() {
+            const postsContainer = document.getElementById('posts-container');
+            const q = query(collection(db, "posts"), orderBy("timestamp", "desc"));
+            onSnapshot(q, (querySnapshot) => {
+                postsContainer.innerHTML = '';
+                querySnapshot.forEach((doc) => {
+                    const post = doc.data();
+                    const postElement = document.createElement('div');
+                    postElement.className = 'post';
+                    postElement.innerHTML = `
+                        <h3><a href="#" class="user-link" data-uid="${post.uid}">${post.username}</a></h3>
+                        <p>${post.text}</p>
+                        ${auth.currentUser.uid === post.uid ? `<button class="delete-btn" data-id="${doc.id}">Delete</button>` : ''}
+                    `;
+                    postsContainer.appendChild(postElement);
+                });
+
+                document.querySelectorAll('.user-link').forEach(link => {
+                    link.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        const uid = e.target.getAttribute('data-uid');
+                        window.location.href = `user-profile.html?uid=${uid}`;
+                    });
+                });
+
+                document.querySelectorAll('.delete-btn').forEach(button => {
+                    button.addEventListener('click', async (e) => {
+                        const postId = e.target.getAttribute('data-id');
+                        await deleteDoc(doc(db, "posts", postId)).catch(error => {
+                            console.error('Error deleting document:', error);
+                        });
+                    });
+                });
+            });
+        }
+
+        async function loadFollowers(uid) {
+            const followersContainer = document.getElementById('followers-container');
+            const userDoc = await getDoc(doc(db, "users", uid));
+            if (userDoc.exists()) {
+                const followers = userDoc.data().following || [];
+                followersContainer.innerHTML = '';
+                for (const followerId of followers) {
+                    const followerDoc = await getDoc(doc(db, "users", followerId));
+                    if (followerDoc.exists()) {
+                        const followerData = followerDoc.data();
+                        const followerElement = document.createElement('div');
+                        followerElement.className = 'follower';
+                        followerElement.innerHTML = `<p>${followerData.username}</p>`;
+                        followersContainer.appendChild(followerElement);
+                    }
+                }
+            }
+        }
+
+        document.getElementById('post-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const user = auth.currentUser;
+            const text = document.getElementById('post-text').value;
+            const userDoc = await getDoc(doc(db, "users", user.uid));
+            const username = userDoc.data().username;
+
+            try {
+                await addDoc(collection(db, "posts"), {
+                    username: username,
+                    text: text,
+                    uid: user.uid,
+                    timestamp: serverTimestamp()
+                });
+                document.getElementById('post-form').reset();
+            } catch (error) {
+                console.error('Error posting: ', error);
+                alert('Error posting: ' + error.message);
+            }
+        });
+    </script>
+</body>
+</html>

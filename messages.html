@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Messages</title>
+    <link rel="stylesheet" href="./message.css">
+</head>
+<body>
+    <header>
+        <h1>Tuna Messages with <span id="chat-partner-name">Loading...</span></h1>
+        <button id="back-btn">Back</button>
+    </header>
+    <main>
+        <div id="chat-container">
+            <div id="messages-container"></div>
+            <form id="message-form">
+                <input type="text" id="message-input" placeholder="Type a message..." required>
+                <button type="submit">Send</button>
+            </form>
+        </div>
+    </main>
+    <script type="module">
+        import { auth, db } from "./app.js";
+        import { getDoc, doc, addDoc, collection, query, orderBy, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+        document.getElementById('back-btn').addEventListener('click', () => {
+            window.history.back();
+        });
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const chatPartnerUid = urlParams.get('uid');
+        let currentUserUid;
+
+        onAuthStateChanged(auth, user => {
+            if (user) {
+                currentUserUid = user.uid;
+                loadChatPartnerName(chatPartnerUid);
+                loadMessages(currentUserUid, chatPartnerUid);
+            } else {
+                window.location.href = 'login.html';
+            }
+        });
+
+        async function loadChatPartnerName(chatPartnerUid) {
+            const userDoc = await getDoc(doc(db, "users", chatPartnerUid));
+            if (userDoc.exists()) {
+                const userData = userDoc.data();
+                document.getElementById('chat-partner-name').textContent = userData.username;
+            } else {
+                document.getElementById('chat-partner-name').textContent = 'Unknown User';
+            }
+        }
+
+        async function loadMessages(currentUserUid, chatPartnerUid) {
+            const messagesContainer = document.getElementById('messages-container');
+            messagesContainer.innerHTML = 'Loading...';
+            const chatId = [currentUserUid, chatPartnerUid].sort().join('-');
+            const q = query(collection(db, `chats/${chatId}/messages`), orderBy('timestamp', 'asc'));
+            onSnapshot(q, (querySnapshot) => {
+                messagesContainer.innerHTML = '';
+                querySnapshot.forEach((doc) => {
+                    const message = doc.data();
+                    const messageElement = document.createElement('div');
+                    messageElement.className = `message ${message.uid === currentUserUid ? 'sent' : 'received'}`;
+                    messageElement.textContent = message.text;
+                    messagesContainer.appendChild(messageElement);
+                });
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            });
+        }
+
+        document.getElementById('message-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const messageInput = document.getElementById('message-input');
+            const text = messageInput.value;
+            const chatId = [currentUserUid, chatPartnerUid].sort().join('-');
+            await addDoc(collection(db, `chats/${chatId}/messages`), {
+                text: text,
+                uid: currentUserUid,
+                timestamp: serverTimestamp()
+            });
+            messageInput.value = '';
+        });
+    </script>
+</body>
+</html>
